@@ -1,0 +1,5 @@
+.idea
+testdata/
+
+# Test currently contain secrets
+*_test.go
