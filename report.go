@@ -10,19 +10,22 @@ import (
 	"fmt"
 	"math/big"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 const coreDataTsDiff = 978307200
 
 type Report struct {
-	Time         time.Time
-	Confidence   byte
-	HashedPubKey string
+	Time       time.Time
+	Confidence byte
+	Lat        float32
+	Lng        float32
+	Accuracy   int8
+	Status     int8
 }
 
-var logger = logrus.StandardLogger()
+func (r Report) String() string {
+	return fmt.Sprintf("%s\thttps://www.google.com/maps?q=%f,%f", r.Time, r.Lat, r.Lng)
+}
 
 func ParseLocationReport(key *KeyPair, content []byte) (*Report, error) {
 	if len(content) != 4+1+57+10+16 {
@@ -61,18 +64,18 @@ func ParseLocationReport(key *KeyPair, content []byte) (*Report, error) {
 		return nil, err
 	}
 
-	logger.Debugf("Decrypted: %v", decrypted)
-
 	lat := binary.BigEndian.Uint32(decrypted[0:4])
 	lng := binary.BigEndian.Uint32(decrypted[4:8])
 	acc := decrypted[8]
 	status := decrypted[9]
 
-	logger.Debugf("Location: %f, %f, accuracy: %d, status: %d", float32(lat)/1e7, float32(lng)/1e7, acc, status)
-
 	return &Report{
 		Time:       ts,
 		Confidence: confidence,
+		Lat:        float32(lat) / 1e7,
+		Lng:        float32(lng) / 1e7,
+		Accuracy:   int8(acc),
+		Status:     int8(status),
 	}, nil
 }
 
