@@ -1,6 +1,8 @@
 package searchpartykeys
 
-import "time"
+import (
+	"time"
+)
 
 type Key struct {
 	Key KeyData `plist:"key"`
@@ -25,4 +27,20 @@ type Beacon struct {
 	Model                 string    `plist:"model"`
 	VendorId              int       `plist:"vendorId"`
 	PublicKey             Key       `plist:"publicKey"`
+}
+
+func (b *Beacon) PrimaryRotations(startTime time.Time) int {
+	timeDiff := startTime.Sub(b.PairingDate)
+	// Key rotates every 15 minutes
+	rotationPeriod := 15 * time.Minute
+	rotationCount := int(timeDiff/rotationPeriod) + 2
+	return rotationCount
+}
+
+func (b *Beacon) SecondaryRotations(startTime time.Time) int {
+	timeDiff := startTime.Sub(b.PairingDate)
+	// Key rotates every 24 hours
+	rotationPeriod := 24 * time.Hour
+	rotationCount := int(timeDiff / rotationPeriod)
+	return rotationCount
 }

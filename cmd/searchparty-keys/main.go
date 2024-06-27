@@ -20,17 +20,11 @@ type DecodeCmd struct {
 	InputFile string `arg:"positional,required" help:"The curve point to decode"`
 }
 
-type GenerateKeysCmd struct {
-	InputFile  string `arg:"positional,required" help:"The input file to decrypt"`
-	Key        string `arg:"--key,-k,env:DECRYPTION_KEY,required" help:"The key to use for decryption (hex)"`
-	AmountKeys int    `arg:"--amount-keys,-a,required" help:"The amount of keys to generate"`
-	KeyOffset  int    `arg:"--key-offset,-o" default:"0" help:"The offset of the key to be used"`
-}
-
 var args struct {
-	Decrypt      *DecryptCmd      `arg:"subcommand:decrypt"`
-	Decode       *DecodeCmd       `arg:"subcommand:decode"`
-	GenerateKeys *GenerateKeysCmd `arg:"subcommand:generate-keys"`
+	Decrypt            *DecryptCmd            `arg:"subcommand:decrypt"`
+	Decode             *DecodeCmd             `arg:"subcommand:decode"`
+	GenerateKeys       *GenerateKeysCmd       `arg:"subcommand:generate-keys"`
+	DecodeLocationInfo *DecodeLocationInfoCmd `arg:"subcommand:decode-location-info"`
 }
 
 var logger = logrus.StandardLogger()
@@ -44,6 +38,8 @@ func main() {
 		doDecode()
 	} else if args.GenerateKeys != nil {
 		doGenerateKeys()
+	} else if args.DecodeLocationInfo != nil {
+		doDecodeLocationInfo()
 	} else {
 		logger.Fatalf("no subcommand specified")
 	}
