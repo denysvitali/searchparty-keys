@@ -25,6 +25,7 @@ var args struct {
 	Decode             *DecodeCmd             `arg:"subcommand:decode"`
 	GenerateKeys       *GenerateKeysCmd       `arg:"subcommand:generate-keys"`
 	DecodeLocationInfo *DecodeLocationInfoCmd `arg:"subcommand:decode-location-info"`
+	BtAddress          *BtAddressCmd          `arg:"subcommand:bt-address"`
 }
 
 var logger = logrus.StandardLogger()
@@ -40,6 +41,8 @@ func main() {
 		doGenerateKeys()
 	} else if args.DecodeLocationInfo != nil {
 		doDecodeLocationInfo()
+	} else if args.BtAddress != nil {
+		doBtAddress()
 	} else {
 		logger.Fatalf("no subcommand specified")
 	}

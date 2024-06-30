@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -13,12 +14,20 @@ import (
 )
 
 type GenerateKeysCmd struct {
-	InputFile  string `arg:"positional,required" help:"The input file to decrypt"`
-	Key        string `arg:"--key,-k,env:DECRYPTION_KEY,required" help:"The key to use for decryption (hex)"`
-	AmountKeys int    `arg:"--amount-keys,-a,required" help:"The amount of keys to generate"`
-	KeyOffset  int    `arg:"--key-offset,-o" default:"-1" help:"The offset of the key to be used"`
-	Secondary  bool   `arg:"--secondary" help:"Generate secondary keys"`
-	UnixStart  int    `arg:"--unix-start" help:"Unix timestamp to start from"`
+	InputFile    string `arg:"positional,required" help:"The input file to decrypt"`
+	Key          string `arg:"--key,-k,env:DECRYPTION_KEY,required" help:"The key to use for decryption (hex)"`
+	AmountKeys   int    `arg:"--amount-keys,-a,required" help:"The amount of keys to generate"`
+	KeyOffset    int    `arg:"--key-offset,-o" default:"-1" help:"The offset of the key to be used"`
+	Secondary    bool   `arg:"--secondary" help:"Generate secondary keys"`
+	UnixStart    int    `arg:"--unix-start" help:"Unix timestamp to start from"`
+	OutputFormat string `arg:"--output-format" default:"text" help:"Output format (json, text)"`
+}
+
+type OutputKey struct {
+	PrivateKey   string `json:"privateKey"`
+	AdvKey       string `json:"advKey"`
+	HashedAdvKey string `json:"hashedAdvKey"`
+	BtAddr       string `json:"btAddr"`
 }
 
 func doGenerateKeys() {
@@ -70,11 +79,31 @@ func doGenerateKeys() {
 		logger.Fatalf("failed to generate keys: %v", err)
 	}
 
-	// Print keys
-	for _, k := range keys {
-		printKey(os.Stdout, &k)
-		printBtAddr(os.Stdout, k.AdvKeyBytes())
-		fmt.Fprintf(os.Stdout, "\n\n")
+	switch args.GenerateKeys.OutputFormat {
+	case "text":
+		// Print keys
+		for _, k := range keys {
+			printKey(os.Stdout, &k)
+			printBtAddr(os.Stdout, k.AdvKeyBytes())
+			fmt.Fprintf(os.Stdout, "\n\n")
+		}
+	case "json":
+		var outputKeys []OutputKey
+		for _, k := range keys {
+			outputKeys = append(outputKeys, OutputKey{
+				PrivateKey:   base64.StdEncoding.EncodeToString(k.PrivateKey()),
+				AdvKey:       base64.StdEncoding.EncodeToString(k.AdvKeyBytes()),
+				HashedAdvKey: base64.StdEncoding.EncodeToString(k.HashedAdvKey()),
+				BtAddr:       formatAddr(searchpartykeys.BtAddrFromAdvKey(k.AdvKeyBytes())),
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(outputKeys); err != nil {
+			logger.Fatalf("failed to encode: %v", err)
+		}
+	default:
+		logger.Fatalf("invalid output format: %s", args.GenerateKeys.OutputFormat)
 	}
 }
 
@@ -84,7 +113,7 @@ func printBtAddr(stdout *os.File, key []byte) {
 }
 
 // formatAddr formats a Bluetooth address as a string.
-func formatAddr(addr []byte) any {
+func formatAddr(addr []byte) string {
 	return fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5])
 }
 
