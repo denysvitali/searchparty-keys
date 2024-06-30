@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"time"
+
+	"github.com/charmbracelet/lipgloss/table"
 
 	searchpartykeys "github.com/denysvitali/searchparty-keys"
 )
@@ -20,7 +21,7 @@ type GenerateKeysCmd struct {
 	KeyOffset    int    `arg:"--key-offset,-o" default:"-1" help:"The offset of the key to be used"`
 	Secondary    bool   `arg:"--secondary" help:"Generate secondary keys"`
 	UnixStart    int    `arg:"--unix-start" help:"Unix timestamp to start from"`
-	OutputFormat string `arg:"--output-format" default:"text" help:"Output format (json, text)"`
+	OutputFormat string `arg:"--output-format" default:"table" help:"Output format (table,text)"`
 }
 
 type OutputKey struct {
@@ -36,9 +37,10 @@ func doGenerateKeys() {
 		logger.Fatalf("failed to get beacon: %v", err)
 	}
 
-	logger.Infof("Beacon: %s (%s, %s) - Paired on %s",
+	logger.Infof("Beacon: %s (%s, %s, %s) - Paired on %s",
 		beacon.Model,
 		beacon.StableIdentifier[0],
+		beacon.Identifier,
 		beacon.SystemVersion,
 		beacon.PairingDate.Format(time.RFC3339),
 	)
@@ -49,67 +51,53 @@ func doGenerateKeys() {
 	}
 	logger.Infof("Start time: %s", startTime.Format(time.RFC3339))
 
-	var rotationCount int
-	if args.GenerateKeys.Secondary {
-		rotationCount = beacon.SecondaryRotations(startTime)
-	} else {
-		rotationCount = beacon.PrimaryRotations(startTime)
-	}
-
-	if args.GenerateKeys.KeyOffset < 0 {
-		logger.Warnf("Setting key offset to %d", rotationCount)
-		args.GenerateKeys.KeyOffset = rotationCount
-	}
-
+	rotationDiff := 15 * time.Minute
 	var sk []byte
 	if args.GenerateKeys.Secondary {
 		sk = beacon.SecondarySharedSecret.Key.Data
+		logger.Warnf("Secondary key")
+		rotationDiff = 24 * time.Hour
 	} else {
 		sk = beacon.SharedSecret.Key.Data
 	}
+
+	amountKeys := args.GenerateKeys.AmountKeys
+	offset := args.GenerateKeys.KeyOffset
 
 	// Generate keys
 	keys, err := searchpartykeys.CalculateAdvertisementKeys(
 		beacon.PrivateKey.Key.Data,
 		sk,
-		args.GenerateKeys.AmountKeys,
-		args.GenerateKeys.KeyOffset,
+		amountKeys,
+		offset,
 	)
 	if err != nil {
 		logger.Fatalf("failed to generate keys: %v", err)
 	}
 
-	switch args.GenerateKeys.OutputFormat {
-	case "text":
-		// Print keys
-		for _, k := range keys {
-			printKey(os.Stdout, &k)
-			printBtAddr(os.Stdout, k.AdvKeyBytes())
-			fmt.Fprintf(os.Stdout, "\n\n")
-		}
-	case "json":
-		var outputKeys []OutputKey
-		for _, k := range keys {
-			outputKeys = append(outputKeys, OutputKey{
-				PrivateKey:   base64.StdEncoding.EncodeToString(k.PrivateKey()),
-				AdvKey:       base64.StdEncoding.EncodeToString(k.AdvKeyBytes()),
-				HashedAdvKey: base64.StdEncoding.EncodeToString(k.HashedAdvKey()),
-				BtAddr:       formatAddr(searchpartykeys.BtAddrFromAdvKey(k.AdvKeyBytes())),
-			})
-		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(outputKeys); err != nil {
-			logger.Fatalf("failed to encode: %v", err)
-		}
-	default:
-		logger.Fatalf("invalid output format: %s", args.GenerateKeys.OutputFormat)
-	}
-}
+	// We round the pairing date to the nearest rotation
+	roundedPairingDate := beacon.PairingDate.Round(rotationDiff).Add(-rotationDiff)
+	logger.Infof("Rounded Pairing date: %s", roundedPairingDate.Format(time.RFC3339))
 
-func printBtAddr(stdout *os.File, key []byte) {
-	btAddr := searchpartykeys.BtAddrFromAdvKey(key)
-	fmt.Fprintf(stdout, "BT Addr: %s\n", formatAddr(btAddr))
+	switch args.GenerateKeys.OutputFormat {
+	case "table":
+		t := table.New()
+		t.Headers("INDEX", "START", "HASHED ADV KEY", "BTADDR")
+		for i, key := range keys {
+			t.Row(
+				fmt.Sprintf("%d", i),
+				roundedPairingDate.Add(time.Duration(i+offset)*rotationDiff).Format(time.RFC3339),
+				base64.StdEncoding.EncodeToString(key.HashedAdvKey()),
+				formatAddr(searchpartykeys.BtAddrFromAdvKey(key.AdvKeyBytes())),
+			)
+		}
+		fmt.Println(t.String())
+	case "text":
+		for _, key := range keys {
+			printKey(os.Stdout, &key)
+			fmt.Println()
+		}
+	}
 }
 
 // formatAddr formats a Bluetooth address as a string.
@@ -146,5 +134,4 @@ func printKey(w io.Writer, pair *searchpartykeys.KeyPair) {
 	fmt.Fprintf(w, "Private key: %s\n", base64.StdEncoding.EncodeToString(pair.PrivateKey()))
 	fmt.Fprintf(w, "Advertisement key: %s\n", base64.StdEncoding.EncodeToString(pair.AdvKeyBytes()))
 	fmt.Fprintf(w, "Hashed adv key: %s\n", base64.StdEncoding.EncodeToString(pair.HashedAdvKey()))
-
 }
