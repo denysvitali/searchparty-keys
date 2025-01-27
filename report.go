@@ -64,8 +64,8 @@ func ParseLocationReport(key *KeyPair, content []byte) (*Report, error) {
 		return nil, err
 	}
 
-	lat := binary.BigEndian.Uint32(decrypted[0:4])
-	lng := binary.BigEndian.Uint32(decrypted[4:8])
+	lat := int32(binary.BigEndian.Uint32(decrypted[0:4]))
+	lng := int32(binary.BigEndian.Uint32(decrypted[4:8]))
 	acc := decrypted[8]
 	status := decrypted[9]
 
