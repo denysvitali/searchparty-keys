@@ -1,6 +1,7 @@
 # searchparty-keys
 
-This is a small package that can be used to derive Apple FindMy keys.
+This is a small package that can be used to derive Apple FindMy keys.  
+It is used by [searchparty-go](https://github.com/denysvitali/searchparty-go).
 
 ## Prerequisites
 
